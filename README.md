@@ -20,7 +20,7 @@ Backend (FastAPI)
     ├── Vector Store (ChromaDB - local)
     └── AI Services (switchable)
         ├── Development: Mock Server (localhost:8001)
-        └── Production:  GPU Server (192.168.8.11:12800)
+        └── Production:  GPU Server (192.168.8.xx:12800)
 ```
 
 ## Prerequisites
