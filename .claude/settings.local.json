@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "SlashCommand(/feature-dev:feature-dev NotebookLM clone with React frontend, Python backend, and Llama3-8b-instruct on A100 GPU)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(./venv/Scripts/pip install:*)",
+      "Bash(./venv/Scripts/python.exe -m pip:*)",
+      "Bash(./venv/Scripts/python:*)",
+      "SlashCommand(/commit-commands:commit)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Initial NotebookLM clone implementation\n\n- Backend (FastAPI): REST API with notebooks, documents, chat endpoints\n- Frontend (React + Vite + Tailwind): Modern UI with document management\n- RAG pipeline: Document chunking, embedding, vector search, LLM query\n- In-memory vector store: Windows-compatible alternative to ChromaDB\n- Mock server: Development mode without GPU dependencies\n- Environment switching: dev/prod configuration via scripts\n\nTech stack:\n- Backend: FastAPI, Pydantic, httpx\n- Frontend: React 18, Vite 5, Tailwind CSS, Axios\n- Document support: PDF, TXT, DOCX\n- LLM/Embedding: Remote API (OpenAI-compatible format)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+    ]
+  }
+}
