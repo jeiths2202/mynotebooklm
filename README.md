@@ -178,8 +178,8 @@ USE_MOCK_SERVICES=true
 ### Production (.env.production)
 
 ```env
-LLM_API_URL=http://192.168.8.11:12800/v1/chat/completions
-EMBEDDING_API_URL=http://192.168.8.11:12800/v1/embeddings
+LLM_API_URL=http://192.168.8.xx:12800/v1/chat/completions
+EMBEDDING_API_URL=http://192.168.8.xx:12800/v1/embeddings
 ENVIRONMENT=production
 USE_MOCK_SERVICES=false
 ```
