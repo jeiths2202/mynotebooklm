@@ -1,136 +1,198 @@
-# NotebookLM Clone
+# NotebookLM Clone with HybridRAG
 
-A RAG-based document Q&A system powered by Llama3-8b-instruct, built with React and FastAPI.
+A production-ready RAG-based document Q&A system with **HybridRAG** (Vector + BM25 + Knowledge Graph), powered by local LLM (Ollama) and Cross-Encoder Reranking.
 
 ## Features
 
+- **HybridRAG Search**: Combines Dense Vector, Sparse BM25, and Knowledge Graph retrieval
+- **Cross-Encoder Reranking**: Uses `ms-marco-MiniLM-L-6-v2` for improved relevance
+- **RRF Fusion**: Reciprocal Rank Fusion for combining multi-source results
+- **Local LLM**: Runs with Ollama (gemma:2b or EEVE-Korean-10.8B)
+- **Local Embeddings**: Uses `all-MiniLM-L6-v2` via sentence-transformers
 - **Document Upload**: Support for PDF, TXT, and DOCX files
-- **RAG-based Q&A**: Ask questions about your documents and get AI-powered answers
 - **Multi-notebook Management**: Organize documents into separate notebooks
 - **Source Citations**: See which documents were used to generate answers
-- **Environment Switching**: Easy switch between development (mock) and production (GPU) modes
 
-## Architecture
+## System Architecture
 
 ```
-Frontend (React + Vite)
-    ↓ HTTP
-Backend (FastAPI)
-    ├── Document Processing (PyPDF2, python-docx)
-    ├── Vector Store (ChromaDB - local)
-    └── AI Services (switchable)
-        ├── Development: Mock Server (localhost:8001)
-        └── Production:  GPU Server (192.168.8.11:12800)
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                            │
+│                      http://localhost:5173                          │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │ REST API
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Backend API (FastAPI)                            │
+│                     http://localhost:8000                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
+│  │ Notebooks   │  │ Documents   │  │   Chat      │                  │
+│  │   API       │  │    API      │  │   API       │                  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                  │
+│         │                │                │                         │
+│         └────────────────┴────────────────┘                         │
+│                          │                                          │
+│                          ▼                                          │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    RAG Service                                │   │
+│  │  ┌─────────────────────────────────────────────────────────┐ │   │
+│  │  │              HybridRetriever                            │ │   │
+│  │  │  ┌───────────┐ ┌───────────┐ ┌───────────┐              │ │   │
+│  │  │  │  Vector   │ │   BM25    │ │   Graph   │              │ │   │
+│  │  │  │  Search   │ │  Search   │ │  Search   │              │ │   │
+│  │  │  └─────┬─────┘ └─────┬─────┘ └─────┬─────┘              │ │   │
+│  │  │        └─────────────┼─────────────┘                    │ │   │
+│  │  │                      ▼                                  │ │   │
+│  │  │            ┌─────────────────┐                          │ │   │
+│  │  │            │   RRF Fusion    │                          │ │   │
+│  │  │            └────────┬────────┘                          │ │   │
+│  │  │                     ▼                                   │ │   │
+│  │  │            ┌─────────────────┐                          │ │   │
+│  │  │            │ Cross-Encoder   │                          │ │   │
+│  │  │            │    Reranker     │                          │ │   │
+│  │  │            └────────┬────────┘                          │ │   │
+│  │  └─────────────────────┼───────────────────────────────────┘ │   │
+│  │                        ▼                                     │   │
+│  │               ┌─────────────────┐                            │   │
+│  │               │   LLM Client    │                            │   │
+│  │               │   (Ollama)      │                            │   │
+│  │               └────────┬────────┘                            │   │
+│  └────────────────────────┼─────────────────────────────────────┘   │
+└───────────────────────────┼─────────────────────────────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│  Neo4j Graph  │  │    Ollama     │  │   Vector +    │
+│   Database    │  │   LLM API     │  │  BM25 Store   │
+│  :7687/:7474  │  │    :11434     │  │   (JSON)      │
+└───────────────┘  └───────────────┘  └───────────────┘
 ```
+
+## Service URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Frontend** | http://localhost:5173 | React UI |
+| **Backend API** | http://localhost:8000 | FastAPI REST API |
+| **API Documentation** | http://localhost:8000/docs | Swagger UI |
+| **Neo4j Browser** | http://localhost:7474 | Graph Database UI |
+| **Ollama API** | http://localhost:11434 | Local LLM Server |
 
 ## Prerequisites
 
 - Python 3.10+
 - Node.js 18+
-- (Production only) Remote GPU Server with vLLM
+- Docker (for Neo4j)
+- Ollama (for local LLM)
 
 ## Quick Start
 
-### Option 1: Development Mode (No GPU Required)
-
-Use mock services for testing without GPU server:
+### 1. Install Ollama and Download Model
 
 ```bash
-# Windows
-scripts\start-dev.bat
+# Install Ollama from https://ollama.ai
 
-# Linux/Mac
-./scripts/switch-env.sh dev
-cd backend && python -m uvicorn mock_server.main:app --port 8001 --reload &
-cd backend && python -m uvicorn app.main:app --port 8000 --reload &
-cd frontend && npm run dev
+# Download a small model for CPU
+ollama pull gemma:2b
+
+# Or for Korean language support (requires more RAM/GPU)
+ollama pull EEVE-Korean-10.8B:latest
 ```
 
-### Option 2: Production Mode (GPU Server Required)
-
-Use real GPU server for LLM and Embeddings:
+### 2. Start Neo4j (Docker)
 
 ```bash
-# Windows
-scripts\start-prod.bat
-
-# Linux/Mac
-./scripts/switch-env.sh prod
-cd backend && python -m uvicorn app.main:app --port 8000 --reload &
-cd frontend && npm run dev
+docker-compose up -d
 ```
 
-### Manual Setup
+### 3. Start Backend
 
 ```bash
-# 1. Backend setup
 cd backend
+
+# Create virtual environment (first time only)
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# Install dependencies (first time only)
 pip install -r requirements.txt
 
-# 2. Choose environment
-# Copy .env.development or .env.production to .env
+# Start server
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-# 3. Start backend
-python -m uvicorn app.main:app --reload --port 8000
+### 4. Start Ollama (if not running)
 
-# 4. Frontend setup (in another terminal)
+```bash
+ollama serve
+```
+
+### 5. Start Frontend (Optional)
+
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Access the Application
-
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000/docs
-- **Mock Server** (dev mode): http://localhost:8001
-
-## Environment Switching
-
-### Switch to Development (Mock Services)
-```bash
-# Windows
-scripts\switch-env.bat dev
-
-# Linux/Mac
-./scripts/switch-env.sh dev
-```
-
-### Switch to Production (GPU Server)
-```bash
-# Windows
-scripts\switch-env.bat prod
-
-# Linux/Mac
-./scripts/switch-env.sh prod
-```
-
-### Check Current Environment
-```bash
-# Windows
-scripts\switch-env.bat status
-
-# Linux/Mac
-./scripts/switch-env.sh status
-```
-
 ## API Endpoints
 
 ### Notebooks
-- `GET /api/notebooks` - List all notebooks
-- `POST /api/notebooks` - Create a notebook
-- `GET /api/notebooks/{id}` - Get notebook details
-- `DELETE /api/notebooks/{id}` - Delete a notebook
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/notebooks` | List all notebooks |
+| `POST` | `/api/notebooks` | Create a notebook |
+| `GET` | `/api/notebooks/{id}` | Get notebook details |
+| `DELETE` | `/api/notebooks/{id}` | Delete a notebook |
 
 ### Documents
-- `GET /api/notebooks/{id}/documents` - List documents in a notebook
-- `POST /api/notebooks/{id}/documents` - Upload a document
-- `DELETE /api/documents/{id}` - Delete a document
 
-### Chat
-- `POST /api/notebooks/{id}/chat` - Send a query
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/notebooks/{id}/documents` | List documents in a notebook |
+| `POST` | `/api/notebooks/{id}/documents` | Upload a document |
+| `DELETE` | `/api/documents/{id}` | Delete a document |
+
+### Chat (HybridRAG)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/notebooks/{id}/chat` | Send a RAG query |
+| `GET` | `/api/notebooks/{id}/stats` | Get retrieval statistics |
+
+#### Chat Request Example
+
+```bash
+curl -X POST "http://localhost:8000/api/notebooks/{notebook_id}/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is error code 001?", "use_hybrid": true}'
+```
+
+#### Chat Response Example
+
+```json
+{
+  "answer": "Error code 001 indicates...",
+  "sources": [
+    {
+      "document_id": "...",
+      "filename": "error_guide.pdf",
+      "chunk_text": "...",
+      "relevance_score": 0.95
+    }
+  ],
+  "notebook_id": "...",
+  "entities": [],
+  "retrieval_mode": "hybrid"
+}
+```
 
 ## Project Structure
 
@@ -138,63 +200,138 @@ scripts\switch-env.bat status
 mynotebooklm/
 ├── backend/
 │   ├── app/
-│   │   ├── api/           # API endpoints
-│   │   ├── models/        # Pydantic schemas
-│   │   ├── services/      # Business logic
-│   │   └── storage/       # Data persistence
-│   ├── mock_server/       # Mock LLM & Embedding APIs
-│   ├── data/              # Uploads & ChromaDB
-│   ├── .env.development   # Dev environment config
-│   ├── .env.production    # Prod environment config
+│   │   ├── api/
+│   │   │   ├── notebooks.py         # Notebook CRUD API
+│   │   │   ├── documents.py         # Document upload/manage API
+│   │   │   └── chat.py              # HybridRAG query API
+│   │   ├── services/
+│   │   │   ├── rag_service.py       # RAG orchestration
+│   │   │   ├── hybrid_retriever.py  # 3-way search + RRF fusion
+│   │   │   ├── vector_store.py      # Dense vector store (JSON-based)
+│   │   │   ├── bm25_store.py        # Sparse keyword search
+│   │   │   ├── graph_store.py       # Neo4j knowledge graph
+│   │   │   ├── reranker.py          # Cross-Encoder reranking
+│   │   │   ├── embeddings.py        # Local/Remote embeddings
+│   │   │   ├── llm_client.py        # Ollama API client
+│   │   │   ├── entity_extractor.py  # LLM-based entity extraction
+│   │   │   └── document_processor.py # PDF/DOCX/TXT processing
+│   │   ├── config.py                # Settings management
+│   │   ├── main.py                  # FastAPI application
+│   │   └── models/                  # Pydantic schemas
+│   ├── data/
+│   │   ├── uploads/                 # Uploaded documents
+│   │   ├── bm25/                    # BM25 indices
+│   │   ├── vector_store/            # Vector embeddings
+│   │   └── notebooks.json           # Notebook metadata
+│   ├── .env                         # Environment configuration
 │   └── requirements.txt
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/    # React components
-│   │   ├── hooks/         # Custom hooks
-│   │   └── services/      # API client
+│   │   ├── components/              # React components
+│   │   ├── pages/                   # Page components
+│   │   └── services/                # API client
 │   └── package.json
 │
-├── scripts/
-│   ├── switch-env.sh      # Environment switcher (Linux/Mac)
-│   ├── switch-env.bat     # Environment switcher (Windows)
-│   ├── start-dev.bat      # Quick start dev mode (Windows)
-│   └── start-prod.bat     # Quick start prod mode (Windows)
-│
+├── docker-compose.yml               # Neo4j container
 └── README.md
 ```
 
 ## Configuration
 
-### Development (.env.development)
+### Environment Variables (.env)
 
 ```env
-LLM_API_URL=http://localhost:8001/v1/chat/completions
-EMBEDDING_API_URL=http://localhost:8001/v1/embeddings
+# LLM Configuration (Ollama)
+LLM_API_URL=http://localhost:11434/api/chat
+LLM_MODEL=gemma:2b
+
+# Embedding Configuration (Local)
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+EMBEDDING_DIMENSION=384
+USE_LOCAL_EMBEDDINGS=true
+
+# Neo4j Configuration
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=notebooklm123
+
+# HybridRAG Settings
+USE_HYBRID_RAG=true
+USE_GRAPH_SEARCH=true
+USE_BM25_SEARCH=true
+USE_RERANKER=true
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RRF_K=60
+GRAPH_K_HOP=2
+
+# Environment
 ENVIRONMENT=development
-USE_MOCK_SERVICES=true
-```
-
-### Production (.env.production)
-
-```env
-LLM_API_URL=http://192.168.8.11:12800/v1/chat/completions
-EMBEDDING_API_URL=http://192.168.8.11:12800/v1/embeddings
-ENVIRONMENT=production
 USE_MOCK_SERVICES=false
 ```
 
-## Mock Server
+### Model Options
 
-The mock server provides OpenAI-compatible endpoints for testing:
+| Model | Size | Speed | Korean Support |
+|-------|------|-------|----------------|
+| `gemma:2b` | 1.7GB | Fast (CPU) | Limited |
+| `llama3:8b` | 4.7GB | Medium | Limited |
+| `EEVE-Korean-10.8B` | 7.7GB | Slow (CPU) / Fast (GPU) | Excellent |
 
-- `POST /v1/chat/completions` - Mock LLM responses
-- `POST /v1/embeddings` - Mock embedding vectors
+## Components
 
-Start the mock server:
+### HybridRetriever
+
+Combines three search methods with RRF fusion:
+
+1. **Vector Search**: Semantic similarity using dense embeddings
+2. **BM25 Search**: Keyword matching using sparse term frequency
+3. **Graph Search**: Knowledge graph traversal (Neo4j)
+
+### Cross-Encoder Reranker
+
+Re-ranks combined results using a cross-encoder model for improved relevance.
+
+### Local Embeddings
+
+Uses `sentence-transformers` with `all-MiniLM-L6-v2` model for fast, local embedding generation.
+
+## Troubleshooting
+
+### Ollama Connection Error
+
 ```bash
-cd backend
-python -m uvicorn mock_server.main:app --port 8001 --reload
+# Ensure Ollama is running
+ollama serve
+
+# Check available models
+ollama list
+
+# Pull a model if needed
+ollama pull gemma:2b
+```
+
+### Neo4j Connection Error
+
+```bash
+# Check Docker container status
+docker ps
+
+# Start Neo4j if not running
+docker-compose up -d
+
+# Check Neo4j logs
+docker logs mynotebooklm-neo4j-1
+```
+
+### Slow LLM Response (CPU)
+
+For faster responses on CPU, use a smaller model:
+
+```bash
+# Use gemma:2b instead of larger models
+# Edit .env:
+LLM_MODEL=gemma:2b
 ```
 
 ## License

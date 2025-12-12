@@ -1,16 +1,23 @@
 from typing import List, Dict, Any, AsyncIterator
 import httpx
+import logging
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class LLMClient:
-    """Client for vLLM API (OpenAI-compatible endpoint)"""
+    """Client for Ollama API (native format)"""
 
     def __init__(self):
-        self.api_url = settings.llm_api_url
+        # Use Ollama's native API format
+        self.base_url = settings.llm_api_url.replace("/v1/chat/completions", "").replace("/api/chat", "")
+        self.api_url = f"{self.base_url}/api/chat"
         self.model = settings.llm_model
-        self.timeout = httpx.Timeout(60.0, connect=10.0)
+        self.timeout = httpx.Timeout(600.0, connect=10.0)  # 10 min timeout for LLM with large context on CPU
+
+        logger.info(f"LLM Client configured: {self.api_url} (model: {self.model})")
 
     async def generate(
         self,
@@ -19,13 +26,16 @@ class LLMClient:
         max_tokens: int = 1024,
         stream: bool = False
     ) -> str:
-        """Generate a response from the LLM"""
+        """Generate a response from the LLM using Ollama native API"""
+        # Ollama API format
         payload = {
             "model": self.model,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": stream
+            "stream": stream,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens
+            }
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -39,36 +49,38 @@ class LLMClient:
         client: httpx.AsyncClient,
         payload: Dict[str, Any]
     ) -> str:
-        """Get a single (non-streaming) response"""
+        """Get a single (non-streaming) response from Ollama"""
+        logger.info(f"Sending request to Ollama: {self.api_url}")
         response = await client.post(self.api_url, json=payload)
         response.raise_for_status()
 
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+        # Ollama native format: {"message": {"role": "assistant", "content": "..."}}
+        return data["message"]["content"]
 
     async def _stream_response(
         self,
         client: httpx.AsyncClient,
         payload: Dict[str, Any]
     ) -> str:
-        """Get a streaming response and concatenate chunks"""
+        """Get a streaming response from Ollama and concatenate chunks"""
+        import json
         full_response = ""
 
         async with client.stream("POST", self.api_url, json=payload) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
-                if line.startswith("data: "):
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    # Ollama stream format: {"message": {"content": "..."}, "done": false}
+                    content = data.get("message", {}).get("content", "")
+                    full_response += content
+                    if data.get("done", False):
                         break
-                    try:
-                        import json
-                        data = json.loads(data_str)
-                        delta = data["choices"][0].get("delta", {})
-                        content = delta.get("content", "")
-                        full_response += content
-                    except Exception:
-                        continue
+                except Exception:
+                    continue
 
         return full_response
 

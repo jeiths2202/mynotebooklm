@@ -4,14 +4,15 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # LLM Configuration
-    llm_api_url: str = "http://192.168.8.11:12800/v1/chat/completions"
-    llm_model: str = "llama3-8b-instruct"
+    # LLM Configuration (Ollama)
+    llm_api_url: str = "http://localhost:11434/v1/chat/completions"
+    llm_model: str = "EEVE-Korean-10.8B:latest"
 
     # Embedding API Configuration (Remote Server)
-    embedding_api_url: str = "http://192.168.8.11:12800/v1/embeddings"
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_api_url: str = "http://localhost:8001/v1/embeddings"
+    embedding_model: str = "mock-all-MiniLM-L6-v2"
     embedding_dimension: int = 384  # all-MiniLM-L6-v2 dimension
+    use_local_embeddings: bool = True  # Use local sentence-transformers instead of remote API
 
     # Environment Configuration
     environment: str = "development"
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     base_dir: Path = Path(__file__).parent.parent
     upload_dir: Path = base_dir / "data" / "uploads"
     chroma_dir: Path = base_dir / "data" / "chroma"
+    bm25_dir: Path = base_dir / "data" / "bm25"
     notebooks_file: Path = base_dir / "data" / "notebooks.json"
 
     # Server
@@ -30,7 +32,21 @@ class Settings(BaseSettings):
     # RAG Settings
     chunk_size: int = 500
     chunk_overlap: int = 50
-    top_k: int = 5
+    top_k: int = 3  # Reduced for faster LLM response with local models
+
+    # Neo4j Configuration
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "notebooklm123"
+
+    # HybridRAG Settings
+    use_hybrid_rag: bool = True
+    use_graph_search: bool = True
+    use_bm25_search: bool = True
+    use_reranker: bool = True
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rrf_k: int = 60  # RRF fusion parameter
+    graph_k_hop: int = 2  # Graph traversal depth
 
     @property
     def is_development(self) -> bool:
@@ -55,3 +71,4 @@ settings = get_settings()
 # Ensure directories exist
 settings.upload_dir.mkdir(parents=True, exist_ok=True)
 settings.chroma_dir.mkdir(parents=True, exist_ok=True)
+settings.bm25_dir.mkdir(parents=True, exist_ok=True)

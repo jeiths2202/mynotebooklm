@@ -68,7 +68,7 @@ async def upload_document(
 
     try:
         # Process document (extract text, generate embeddings, store in vector DB)
-        chunk_count = rag_service.process_document(
+        chunk_count = await rag_service.process_document(
             notebook_id=notebook_id,
             document_id=document.id,
             file_path=file_path
